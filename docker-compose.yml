@@ -1,0 +1,18 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: rentals_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: rentals_dev
+      MYSQL_USER: rentals
+      MYSQL_PASSWORD: rentals_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - rentals_db_data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d
+
+volumes:
+  rentals_db_data:
