@@ -1,5 +1,5 @@
 """
-Excepciones de dominio para el backend de Gestión de Apartamentos.
+Excepciones de dominio del backend.
 
 Estas son excepciones puramente de negocio sin dependencia de frameworks HTTP.
 La capa de API asigna cada excepción al código de estado HTTP apropiado.

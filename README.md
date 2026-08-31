@@ -1,141 +1,210 @@
-# Rentals — Sistema de Gestión de Reservas
+# Gestión de Apartamentos Turísticos
 
-Aplicación web full-stack para la gestión de reservas de apartamentos. Incluye un calendario visual interactivo, filtros por piso y estado, y un formulario de creación de reservas.
+Aplicación web full-stack para la gestión operativa de un conjunto de apartamentos
+de alquiler turístico: reservas, limpiezas y facturación de las limpiezas.
 
-## Tecnologías
-
-| Capa | Tecnología |
-|---|---|
-| Frontend | Angular 19, SCSS, Signals API |
-| Backend | FastAPI (Python 3), Pydantic v2 |
-| Base de datos | MySQL |
-| Proxy de desarrollo | Angular DevServer → `http://127.0.0.1:8000` |
+> **Contexto.** Proyecto real desarrollado para un cliente por dos personas y ya
+> cerrado. Este repositorio es una versión **anonimizada** publicada como pieza de
+> portfolio: la marca, los logotipos y los datos del cliente se han sustituido por
+> equivalentes genéricos. No incluye datos reales de propiedades, clientes ni reservas.
 
 ---
 
-## Estructura del proyecto
+## El problema
 
-```
-rentals_project/
-├── backend/                  # API REST con FastAPI
-│   ├── main.py               # Punto de entrada
-│   ├── config.py             # Variables de entorno (Pydantic Settings)
-│   ├── requirements.txt
-│   ├── database/
-│   │   └── connection.py     # Conexión a MySQL
-│   ├── models/
-│   │   └── booking.py        # Modelos Pydantic (Booking, BookingCreate, BookingUpdate)
-│   ├── repositories/
-│   │   └── booking_repository.py
-│   ├── services/
-│   │   └── booking_service.py
-│   └── routers/
-│       └── bookings.py       # Endpoints /api/v1/bookings
-│
-└── frontend/         # SPA Angular
-    └── src/app/
-        ├── models/           # Interfaces TypeScript (Booking, BASE_STATUSES)
-        ├── services/         # BookingService (HTTP)
-        ├── pipes/            # BookingColorPipe
-        └── pages/
-            └── calendar/     # Vista principal del calendario
-                └── components/
-                    ├── calendar-header/
-                    ├── week-row/
-                    ├── booking-modal/       # Modal de edición
-                    └── booking-create-modal/ # Modal de creación
-```
+Una pequeña gestora de apartamentos turísticos llevaba la operativa en hojas de
+cálculo y mensajes sueltos. Eso generaba tres problemas concretos:
+
+- **Visibilidad de las reservas.** Sin una vista única del mes era difícil saber
+  qué apartamento estaba ocupado y cuándo, y detectar solapamientos.
+- **Coordinación de las limpiezas.** El hueco de limpieza depende del check-out de
+  una reserva y del check-in de la siguiente. Calcularlo a mano, por apartamento y
+  día, es lento y propenso a errores.
+- **Facturación de las limpiezas.** Cada limpieza se factura por horas y tarifa, y
+  el recibo hay que generarlo, archivarlo y confirmar que se ha pagado.
+
+La aplicación cubre esas tres áreas con control de acceso por rol: **`admin`**
+(operativa completa) y **`limpiadora`** (su trabajo y sus recibos).
 
 ---
 
-## Configuración
+## Funcionalidades
 
-### 1. Variables de entorno
+**Reservas y calendario**
 
-Copia `.env.example` a `.env` en la raíz del proyecto y rellena los valores:
+- Vista mensual por apartamento con las reservas dispuestas en carriles sin solapamiento.
+- Filtros por apartamento y por estado; alta, edición y borrado de reservas.
+- Horas de entrada y salida pactadas por reserva, con hora estándar por defecto.
+- Bonificación eléctrica por noche, configurable por apartamento.
 
-```env
-# Base de datos
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=tu_usuario
-DB_PASS=tu_contraseña
-DB_NAME=nombre_bd
+**Limpiezas**
+
+- Cálculo de las oportunidades de limpieza a partir de los huecos entre un check-out
+  y el siguiente check-in.
+- Tipos de limpieza con tarifa por hora, gestionables desde el panel de administración.
+- Vista de organización de limpiezas por día y apartamento.
+
+**Facturación**
+
+- Alta de factura de limpieza (horas × tarifa), rectificación y nota de cancelación.
+- Recibo previsualizado en Angular y **replicado en una plantilla Jinja2** que el
+  backend renderiza a PDF con **Chromium headless**, de modo que el PDF archivado es
+  idéntico a lo que el usuario vio en pantalla.
+- El PDF se sube por SSH/SCP a un **NAS Synology**. La subida es *best-effort* con
+  cola de reintentos: cada documento lleva estado
+  (`Pendiente` → `Procesando` → `Completado` / `Error`), número de intentos,
+  `next_retry_at` y último error. Un worker horario reprocesa lo que quedó pendiente.
+- Confirmación de pago por parte de administración y de la limpiadora.
+
+**Búsquedas y usuarios**
+
+- Búsqueda de reservas, de disponibilidad y por apartamento, con panel de estadísticas.
+- Exportación a Excel de la plantilla de resumen del **Modelo 210** (alquiler turístico).
+- Gestión de usuarios, autenticación JWT con *refresh*, cambio obligatorio de la
+  contraseña inicial y recuperación de contraseña por email.
+
+---
+
+## Arquitectura
+
+### Backend — Clean Architecture
+
+Cuatro capas con la dependencia apuntando siempre **hacia dentro**: cada capa conoce
+a las de dentro, nunca a las de fuera.
+
+```
+┌────────────────────────────────────────────────────────┐
+│  api/            Routers FastAPI, schemas, manejo de   │  ← HTTP
+│                  excepciones, inyección de dependencias│
+├────────────────────────────────────────────────────────┤
+│  application/    Casos de uso + INTERFACES de los      │  ← Orquestación
+│                  servicios que necesitan (puertos)     │
+├────────────────────────────────────────────────────────┤
+│  domain/         Entidades y reglas de negocio,        │  ← Núcleo
+│                  excepciones, interfaces de repositorio│
+└────────────────────────────────────────────────────────┘
+                            ▲  implementa los puertos
+┌───────────────────────────┴────────────────────────────┐
+│  infrastructure/  Adaptadores concretos: SQLAlchemy,   │  ← Detalles
+│                   JWT, passlib, SMTP, Chromium, SCP    │
+└────────────────────────────────────────────────────────┘
 ```
 
-> También se aceptan las variantes `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_PORT`.
+- **`domain/`** — entidades Pydantic (`Booking`, `Bill`, `BillDocument`, `Apartment`,
+  `User`, `CleaningType`), reglas de negocio y excepciones de dominio.
+  No importa nada de las demás capas.
+- **`application/`** — un caso de uso por operación (`CreateBillUseCase`,
+  `GenerateAndStoreBillDocumentUseCase`, `LoginUseCase`…). Aquí viven los **puertos**:
+  `IBillRepository`, `IFileStorage`, `IEmailSender`, `ITokenManager`,
+  `IPasswordManager`, `IBillPdfRenderer`. La capa depende de las interfaces, nunca
+  de sus implementaciones.
+- **`infrastructure/`** — los **adaptadores** que cumplen esos puertos:
+  `SQLAlchemy*Repository`, `JwtTokenManager`, `PasslibPasswordManager`,
+  `SmtpEmailSender`, `ChromiumBillPdfRenderer`, `SynologyFileStorage`.
+- **`api/`** — routers versionados bajo `/api/v1`, schemas de entrada/salida y el
+  mapeo de excepción de dominio → respuesta HTTP. **`api/dependencies.py` es el
+  *composition root*:** el único punto donde se decide qué implementación concreta
+  recibe cada caso de uso, mediante `Depends` de FastAPI.
 
-### 2. Base de datos y migraciones
+Esa inversión de dependencias es lo que permite probar los casos de uso con dobles
+en lugar de necesitar MySQL, un NAS y un servidor SMTP reales.
 
-Para una base de datos vacía, Alembic crea el esquema inicial y aplica las
-migraciones pendientes:
+### Frontend — Angular por features
+
+```
+frontend/src/app/
+├── auth/         AuthService, interceptor HTTP, guards, TokenService
+├── config/       Permisos por rol, configuración del banner
+├── models/       Interfaces TypeScript del dominio
+├── services/     Un servicio HTTP por recurso (bookings, bills, apartments…)
+├── pages/        Una carpeta por pantalla, con sus componentes hijos
+│   ├── calendar/              (calendar-header, week-row, booking-bar)
+│   ├── searches/              (booking, availability y apartment search, stats)
+│   └── cleaning-organization/, bills/, admin/, account/, logging/…
+├── shared/       Componentes reutilizables (bill-receipt, modales, formularios)
+├── pipes/        Transformaciones de presentación
+└── directives/
+```
+
+Componentes *standalone* y **Signals API** de Angular 19 para el estado de las vistas.
+
+### Cómo se comunican backend y frontend
+
+|            | Desarrollo                                            | Producción                                                                     |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **SPA**    | `ng serve` en `:4200`                                 | Estáticos compilados, servidos por Caddy                                        |
+| **API**    | Uvicorn en `:8000`                                    | Contenedor `backend`, sin puerto público                                        |
+| **Puente** | `proxy.conf.json` reenvía `/api/*` → `127.0.0.1:8000` | Caddy hace `reverse_proxy /api/* → backend:8000` por la red interna de Compose  |
+
+`environment.apiUrl` está **vacío en ambos entornos**: el frontend siempre llama a
+rutas relativas (`/api/v1/...`) y quien resuelve el destino es el proxy. Así no hay
+URLs de backend incrustadas en el bundle, y en producción no hace falta CORS porque
+SPA y API comparten origen.
+
+La autenticación viaja en `Authorization: Bearer <access_token>`. El interceptor HTTP
+adjunta el token, intenta un *refresh* cuando la respuesta es 401 y cierra sesión si
+ese refresh falla.
+
+---
+
+## Stack técnico
+
+| Capa                | Tecnología                                                                  |
+| ------------------- | --------------------------------------------------------------------------- |
+| **Frontend**        | Angular 19.2 · TypeScript 5.7 · RxJS 7.8 · SCSS · Signals API               |
+| **Backend**         | FastAPI 0.115 · Python 3.13 · Pydantic 2.9 · SQLAlchemy 2.0 · Alembic       |
+| **Base de datos**   | MySQL 8.0 (PyMySQL)                                                         |
+| **Autenticación**   | PyJWT (access + refresh) · passlib con bcrypt                               |
+| **Documentos**      | Jinja2 + Chromium headless (HTML → PDF) · paramiko/scp (NAS Synology)       |
+| **Infraestructura** | Docker · Docker Compose · Caddy (TLS automático)                            |
+| **Calidad**         | Ruff · mypy · pytest + coverage · ESLint · Prettier · Jest · GitHub Actions |
+| **Gestores**        | pip (backend) · pnpm 10.33 sobre Node 22.22 (frontend)                      |
+
+El backend tiene 47 ficheros de test repartidos en `unit/`, `integration/` y `e2e/`,
+el frontend 36 *specs* de Jest, y el esquema se versiona con 6 migraciones de Alembic.
+
+---
+
+## Puesta en marcha en local
+
+### Requisitos
+
+- Python 3.13 · Node 22.22 (ver [`.nvmrc`](.nvmrc)) · pnpm 10.33 · Docker
+- Chromium o Chrome instalado, si quieres generar los PDF de factura
+
+### 1 · Base de datos
 
 ```bash
-cd backend
-alembic upgrade head
+docker compose up -d db      # MySQL 8.0 en :3306
 ```
 
-Para desarrollo con datos reales, el dump local `db/init/backup.sql` se carga al
-arrancar MySQL con Docker. Ese dump no forma parte de Git y solo se usa en local:
-
-```bash
-docker compose up db
-# o, si usas Docker Compose v1:
-docker-compose up db
-cd backend
-alembic stamp c796a5e365dc
-alembic upgrade head
-```
-
-El `stamp` solo debe hacerse una vez sobre una base de datos existente creada
-desde el dump. A partir de ahí, las migraciones futuras se aplican normalmente
-con `alembic upgrade head`.
-
----
-
-## Instalación y arranque
-
-### Backend
+### 2 · Backend
 
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-./start.sh
+
+cp .env.example .env               # rellenar DB_*, JWT_SECRET_KEY y DEFAULT_PASSWORD
+alembic upgrade head               # crea el esquema
+./start.sh                         # migra y arranca Uvicorn
 ```
 
-La API queda disponible en `http://localhost:8000`.
-Documentación interactiva: `http://localhost:8000/docs`
+API en `http://localhost:8000`; documentación interactiva en `/docs` (solo con `DEBUG=true`).
 
-Para desarrollo con recarga automática:
+Variables mínimas para arrancar: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME`,
+`JWT_SECRET_KEY` y `DEFAULT_PASSWORD`. Si dejas `SMTP_HOST` vacío, los enlaces de
+recuperación de contraseña se imprimen por consola en lugar de enviarse por email.
+Todas las opciones están documentadas en [`backend/.env.example`](backend/.env.example).
+
+Crear el primer usuario administrador:
 
 ```bash
-cd backend
-./start-dev.sh
+python scripts/create_admin_user.py
 ```
 
-Los scripts de arranque ejecutan primero las migraciones pendientes y, solo si
-terminan correctamente, arrancan Uvicorn:
-
-```bash
-alembic upgrade head
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Si hay cambios en la base de datos, crea la migración correspondiente y después
-arranca la app con el script habitual:
-
-```bash
-cd backend
-alembic revision --autogenerate -m "describe database change"
-./start.sh
-```
-
-`python main.py` sigue arrancando la API directamente, pero no aplica
-migraciones. Úsalo solo si ya has ejecutado `alembic upgrade head`.
-
-### Frontend
+### 3 · Frontend
 
 ```bash
 cd frontend
@@ -143,206 +212,72 @@ pnpm install
 pnpm start
 ```
 
-La aplicación queda disponible en `http://localhost:4200`.
-Las peticiones a `/api/*` se redirigen automáticamente al backend mediante el proxy configurado en `proxy.conf.json`.
+Aplicación en `http://localhost:4200`; las llamadas a `/api/*` llegan al backend por proxy.
 
-### Calidad local
-
-El hook local de commit lo gestiona `pre-commit`. Solo ejecuta checks rápidos y
-autoformato sobre los archivos afectados; la validación completa vive en GitHub
-Actions.
-
-Para preparar el entorno local:
-
-```bash
-python3.13 -m venv .venv
-. .venv/bin/activate
-pip install -r backend/requirements.txt pre-commit ruff==0.15.13 mypy==2.1.0
-
-cd frontend
-pnpm install
-
-cd ..
-pre-commit install
-```
-
-Para ejecutar los hooks manualmente desde la raíz:
-
-```bash
-pre-commit run --all-files
-```
-
-Comandos útiles para validar antes de subir:
+### Pruebas y calidad
 
 ```bash
 # Backend
 cd backend
-ruff check .
-ruff format --check .
-python -m mypy api/ application/ domain/ infrastructure/ config.py main.py --config-file pyproject.toml --explicit-package-bases
-alembic upgrade head
+ruff check . && ruff format --check .
+python -m mypy api/ application/ domain/ infrastructure/ config.py main.py \
+  --config-file pyproject.toml --explicit-package-bases
 python -m pytest tests/ --cov --cov-report=term-missing
 
 # Frontend
-cd ../frontend
-pnpm lint
-pnpm exec prettier --check "src/**/*.{ts,html,scss}"
-pnpm typecheck
-pnpm test:ci
-pnpm build
+cd frontend
+pnpm lint && pnpm exec prettier --check "src/**/*.{ts,html,scss}"
+pnpm typecheck && pnpm test:ci && pnpm build
 ```
+
+Ambos conjuntos se ejecutan en GitHub Actions
+([`backend-ci.yml`](.github/workflows/backend-ci.yml) y
+[`frontend-ci.yml`](.github/workflows/frontend-ci.yml)); los tests de backend corren
+contra un servicio MySQL real.
 
 ---
 
-## API — Endpoints principales
+## Capturas de pantalla
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/api/v1/bookings/` | Listar reservas (soporta filtros por fecha) |
-| `GET` | `/api/v1/bookings/{id}` | Obtener una reserva por ID |
-| `POST` | `/api/v1/bookings/` | Crear nueva reserva |
-| `PUT` | `/api/v1/bookings/{id}` | Actualizar reserva existente |
-| `DELETE` | `/api/v1/bookings/{id}` | Eliminar reserva |
+<!-- ═══════════════════════════════════════════════════════════════════
+     PENDIENTE: añadir las imágenes en docs/screenshots/ y enlazarlas
+     aquí, sustituyendo cada "_pendiente_" por
+     ![descripción](docs/screenshots/nombre.png)
+     ═══════════════════════════════════════════════════════════════════ -->
 
----
-
-## Funcionalidades actuales
-
-- **Calendario mensual** con vista de reservas por semana y carril (sin solapamientos)
-- **Filtros múltiples** por piso (`apartment_id`) y estado, con checkboxes desplegables
-- **Modal de detalle y edición** de reservas existentes
-- **Modal de creación** de nuevas reservas con validación, cálculo automático de noches y selector de piso desde la base de datos
-- **Estados de reserva**: `Confirmed`, `Pending`, `Cancelled`, `ok` (configurables en `booking.model.ts`)
-- Diseño **responsive** con soporte móvil
+| Vista                                                             | Captura     |
+| ----------------------------------------------------------------- | ----------- |
+| **Calendario mensual** — reservas por apartamento y semana         | _pendiente_ |
+| **Organización de limpiezas** — huecos entre check-out y check-in  | _pendiente_ |
+| **Recibo de factura** — previsualización que replica el PDF        | _pendiente_ |
+| **Búsquedas** — reservas, disponibilidad y estadísticas            | _pendiente_ |
+| **Panel de administración** — usuarios, apartamentos y tarifas     | _pendiente_ |
 
 ---
 
-## Despliegue en VPS (Docker Compose)
+## Despliegue
 
-La producción usa **Docker Compose** con tres servicios lógicos:
+La producción se orquesta con `docker-compose.prod.yml` sobre una MySQL externa
+(no contenedorizada):
 
-| Servicio | Rol |
-|---|---|
-| `migrate` | Ejecuta `alembic upgrade head` una vez contra la MySQL externa |
-| `backend` | FastAPI + Chromium (PDF de facturas) |
-| `web` | Angular estático + Caddy (HTTPS y proxy `/api/*`) |
-
-**No se incluye MySQL** en el stack de producción: la base de datos del cliente ya existe y solo recibe migraciones de Alembic.
-
-Los archivos `docker-compose.yml` y `docker-compose.test.yml` de la raíz son **solo para desarrollo local y CI**.
-
-### Requisitos en la VPS
-
-- Docker Engine y Docker Compose v2
-- DNS del dominio apuntando a la IP de la VPS (`APP_DOMAIN`)
-- Puertos **80** y **443** abiertos
-- Acceso de red desde la VPS a la MySQL de producción (firewall / allowlist)
-- **Tailscale** instalado en el **host** de la VPS si el NAS Synology solo es accesible por red `100.x.x.x`
-- Backup de la base de datos antes del primer despliegue
-
-### Archivos de despliegue
-
-```
-rentals_properties/
-├── backend/Dockerfile          # Imagen FastAPI + Chromium
-├── backend/docker-entrypoint.sh
-├── frontend/Dockerfile         # Build Angular + Caddy
-├── deploy/Caddyfile            # TLS, proxy /api, SPA fallback
-├── docker-compose.prod.yml     # Orquestación producción
-├── .env.production.example     # Plantilla de variables (sin secretos)
-└── .dockerignore
-```
-
-### Primer despliegue
-
-1. Clonar el repositorio en la VPS.
-
-2. Crear el fichero de entorno (no commitear):
+| Servicio          | Rol                                                                   |
+| ----------------- | --------------------------------------------------------------------- |
+| `migrate`         | Ejecuta `alembic upgrade head` antes de levantar el resto             |
+| `backend`         | FastAPI + Chromium, sin puerto público                                |
+| `bill-docs-retry` | Worker horario que reintenta la sincronización de PDFs con el NAS     |
+| `web`             | SPA de Angular servida por Caddy, con TLS automático y proxy `/api/*` |
 
 ```bash
-cp .env.production.example .env.production
+cp .env.production.example .env.production   # rellenar con valores reales
 chmod 600 .env.production
-# Editar .env.production con valores reales (DB, JWT, NAS, SMTP, dominio...)
-```
-
-3. Validar la configuración de Compose:
-
-```bash
-docker compose -f docker-compose.prod.yml config
-```
-
-4. Construir y levantar el stack (migraciones + backend + web):
-
-```bash
+docker compose -f docker-compose.prod.yml config       # validar
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-5. Crear el usuario administrador inicial (solo si no existe):
+`docker-compose.yml` y `docker-compose.test.yml` son **solo** para desarrollo local y CI.
 
-```bash
-docker compose -f docker-compose.prod.yml exec backend python scripts/create_admin_user.py
-```
+---
 
-6. Comprobar salud:
+## Licencia
 
-```bash
-curl -f https://TU_DOMINIO/health
-```
-
-### Variables críticas (`.env.production`)
-
-| Variable | Descripción |
-|---|---|
-| `APP_DOMAIN` | Dominio público (Caddy + certificado TLS) |
-| `DB_*` | Conexión a MySQL externa |
-| `JWT_SECRET_KEY` | Secreto fuerte para tokens |
-| `DEFAULT_PASSWORD` | Obligatoria para arrancar la API |
-| `FRONTEND_URL` | URL HTTPS del frontend (emails de reset) |
-| `CORS_ORIGINS` | JSON con el origen HTTPS del frontend |
-| `NAS_*` | Credenciales y ruta del NAS (PDF de facturas) |
-| `BILL_PDF_CHROMIUM_PATH` | `/usr/bin/chromium` (ya en la imagen) |
-| `SMTP_*` | Envío de emails en producción |
-
-### Actualización / rollback
-
-**Actualizar** tras un `git pull`:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-El servicio `migrate` vuelve a ejecutar `alembic upgrade head` en cada despliegue.
-
-**Rollback** de aplicación (sin tocar la BD):
-
-```bash
-git checkout <commit-anterior>
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-Si una migración ya se aplicó, el rollback de código puede requerir restaurar un backup de MySQL.
-
-### Logs y operación
-
-```bash
-docker compose -f docker-compose.prod.yml logs -f backend
-docker compose -f docker-compose.prod.yml logs -f bill-docs-retry
-docker compose -f docker-compose.prod.yml logs -f web
-docker compose -f docker-compose.prod.yml ps
-```
-
-El servicio `bill-docs-retry` reintenta cada hora la sincronización de PDFs con el NAS
-(documentos en error/pendientes, intentos `Procesando` cortados y facturas sin documento).
-Para forzar un ciclo manual:
-
-```bash
-docker compose -f docker-compose.prod.yml exec bill-docs-retry python scripts/retry_bill_documents.py
-```
-
-### Smoke tests post-despliegue
-
-- [ ] `https://TU_DOMINIO` carga la SPA (rutas directas como `/login` funcionan)
-- [ ] `https://TU_DOMINIO/health` devuelve `{"status":"healthy","database":"ok"}`
-- [ ] Login y refresh de sesión
-- [ ] Crear factura y verificar generación de PDF en el NAS
-- [ ] Solo los puertos 80/443 están expuestos públicamente (el backend no publica `:8000`)
+[MIT](LICENSE).

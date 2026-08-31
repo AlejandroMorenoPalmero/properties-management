@@ -14,7 +14,7 @@ from application.shared.email_sender_interface import IEmailSender
 
 logger = logging.getLogger(__name__)
 
-_SUBJECT = "Restablece tu contraseña — Gestión de Apartamentos"
+_SUBJECT = "Restablece tu contraseña"
 
 
 def _build_message(sender: str, to_email: str, reset_link: str) -> EmailMessage:

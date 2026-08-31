@@ -4,6 +4,15 @@
 !.env.example
 !.env.production.example
 
+# Certificados y claves privadas (nunca deben entrar al repositorio)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
 # ── Python / FastAPI ─────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
@@ -36,7 +45,7 @@ coverage.xml
 *.bak
 
 # ── Node / Angular ───────────────────────────────────────────────────────────
-frontend/node_modules/
+node_modules/
 frontend/dist/
 frontend/.angular/cache/
 frontend/tmp/
@@ -45,6 +54,7 @@ frontend/coverage/
 frontend/npm-debug.log
 frontend/yarn-error.log
 frontend/package-lock.json
+.pnpm-store/
 
 # ── IDEs ─────────────────────────────────────────────────────────────────────
 **/.vscode/
@@ -54,7 +64,17 @@ frontend/package-lock.json
 .history/
 
 # ── Base de datos local (datos reales del cliente, nunca subir) ──────────────
-db/init/*.sql
+db/init/
+*.sql
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+
+# ── Logs y temporales ────────────────────────────────────────────────────────
+*.log
+tmp/
 
 # ── Sistema operativo ────────────────────────────────────────────────────────
 .DS_Store
