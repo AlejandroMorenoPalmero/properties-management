@@ -237,12 +237,11 @@ contra un servicio MySQL real.
 
 | Vista                                                             | Captura     |
 | ----------------------------------------------------------------- | ----------- |
-| **Calendario mensual** — reservas por apartamento y semana         | <img width="1136" height="403" alt="image" src="https://github.com/user-attachments/assets/a62d6b9c-e333-473e-b441-f8f82f3a6096" />
- |
-| **Organización de limpiezas** — huecos entre check-out y check-in  | _pendiente_ |
-| **Recibo de factura** — previsualización que replica el PDF        | _pendiente_ |
-| **Búsquedas** — reservas, disponibilidad y estadísticas            | _pendiente_ |
-| **Panel de administración** — usuarios, apartamentos y tarifas     | _pendiente_ |
+| **Calendario mensual** — reservas por apartamento y semana         | <img width="1230" height="502" alt="image" src="https://github.com/user-attachments/assets/f43f647f-24de-4060-83ad-1b49e7285489" /> |
+| **Organización de limpiezas** — huecos entre check-out y check-in  | <img width="1240" height="497" alt="image" src="https://github.com/user-attachments/assets/b9cdc366-0a48-445d-a779-777f4b699fb5" /> |
+| **Recibo de factura** — previsualización que replica el PDF        | <img width="619" height="622" alt="image" src="https://github.com/user-attachments/assets/1c5cd8e0-cd81-424b-9f3b-f8ce54bbfbe1" /> |
+| **Búsquedas** — reservas, disponibilidad y estadísticas            | <img width="1235" height="789" alt="image" src="https://github.com/user-attachments/assets/2849eef5-8c5d-4360-a3b4-d0c928016573" /> |
+| **Panel de administración** — usuarios, apartamentos y tarifas     | <img width="1136" height="403" alt="image" src="https://github.com/user-attachments/assets/a62d6b9c-e333-473e-b441-f8f82f3a6096" /> |
 
 ---
 
