@@ -234,15 +234,11 @@ contra un servicio MySQL real.
 
 ## Capturas de pantalla
 
-<!-- ═══════════════════════════════════════════════════════════════════
-     PENDIENTE: añadir las imágenes en docs/screenshots/ y enlazarlas
-     aquí, sustituyendo cada "_pendiente_" por
-     ![descripción](docs/screenshots/nombre.png)
-     ═══════════════════════════════════════════════════════════════════ -->
 
 | Vista                                                             | Captura     |
 | ----------------------------------------------------------------- | ----------- |
-| **Calendario mensual** — reservas por apartamento y semana         | _pendiente_ |
+| **Calendario mensual** — reservas por apartamento y semana         | <img width="1136" height="403" alt="image" src="https://github.com/user-attachments/assets/a62d6b9c-e333-473e-b441-f8f82f3a6096" />
+ |
 | **Organización de limpiezas** — huecos entre check-out y check-in  | _pendiente_ |
 | **Recibo de factura** — previsualización que replica el PDF        | _pendiente_ |
 | **Búsquedas** — reservas, disponibilidad y estadísticas            | _pendiente_ |
@@ -270,6 +266,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 `docker-compose.yml` y `docker-compose.test.yml` son **solo** para desarrollo local y CI.
+
+
 
 ---
 
