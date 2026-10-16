@@ -3,11 +3,6 @@
 Aplicación web full-stack para la gestión operativa de un conjunto de apartamentos
 de alquiler turístico: reservas, limpiezas y facturación de las limpiezas.
 
-> **Contexto.** Proyecto real desarrollado para un cliente por dos personas y ya
-> cerrado. Este repositorio es una versión **anonimizada** publicada como pieza de
-> portfolio: la marca, los logotipos y los datos del cliente se han sustituido por
-> equivalentes genéricos. No incluye datos reales de propiedades, clientes ni reservas.
-
 ---
 
 ## El problema
